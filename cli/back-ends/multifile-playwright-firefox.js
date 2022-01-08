@@ -28,14 +28,14 @@ const scripts = require("./common/scripts.js");
 
 const NETWORK_IDLE_STATE = "networkidle";
 
-let browser;
+var browser, context;
 
 exports.initialize = async options => {
 	browser = await playwright.launch(getBrowserOptions(options));
 };
 
 exports.getPageData = async options => {
-	let page, context;
+	let page;
 	try {
 		context = await browser.newContext({
 			bypassCSP: options.browserBypassCSP === undefined || options.browserBypassCSP
@@ -100,8 +100,8 @@ async function getPageData(page, options) {
 	if (options.browserWaitDelay) {
 		await page.waitForTimeout(options.browserWaitDelay);
 	}
-	const pageData = await page.evaluate(async options => {
-		options.compressContent = true;
+	var pageData = await page.evaluate(async options => {
+		options.compressContent = false;
 		options.getFileContent = singlefile.getFileContent;
 		const pageData = await singlefile.getPageData(options);
 		if (options.includeInfobar) {
@@ -109,7 +109,40 @@ async function getPageData(page, options) {
 		}
 		return pageData;
 	}, options);
-	console.log(pageData.resources);
+	// TODO fetch and fill resource content before return
+	await fetchAndFillPageResources(pageData);
 	await page.waitForTimeout(200000);
 	return pageData;
+}
+
+// Function modified from lib/single-file/processors/compression/compression.js addPageResources
+async function fetchAndFillPageResources(pageData) {
+	for (const resourceType of Object.keys(pageData.resources)) {
+		for (const resourceFile of pageData.resources[resourceType]) {
+			if (resourceFile.url && !resourceFile.url.startsWith("data:") && resourceType != "frames") {
+				// FIXME should not await here, should parallelize
+				resourceFile.content = await fetchAndFillFile(resourceFile);
+			}
+		}
+	}
+	/*
+	await Promise.all(Object.keys(pageData.resources).map(async resourceType =>
+		Promise.all(pageData.resources[resourceType].map(resourceFile => {
+			/* FIXME don't handle frames for now
+			if (resourceType == "frames") {
+				return fetchAndFillPageResources(data);
+			} else {
+				return addFile(zipWriter, prefixName, data, true);
+			}
+			return resourceFile.content;
+		}))
+	));
+	*/
+	console.log(pageData.resources);
+}
+
+async function fetchAndFillFile(resourceFile) {
+	console.log("Handling resourceFile: "+resourceFile.url);
+	return context.request.get(resourceFile.url).
+		then(apiresponse => apiresponse.body());
 }

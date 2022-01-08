@@ -27,7 +27,7 @@
 
 const fileUrl = require("file-url");
 const fs = require("fs");
-const api = require("./single-file-cli-api");
+const api = require("./multi-file-cli-api");
 run(require("./args"))
 	.catch(error => console.error(error.message || error)); // eslint-disable-line no-console	
 

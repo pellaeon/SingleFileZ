@@ -87,7 +87,8 @@ exports.initialize = initialize;
 async function initialize(options) {
 	options = Object.assign({}, DEFAULT_OPTIONS, options);
 	maxParallelWorkers = options.maxParallelWorkers;
-	backend = require(backEnds[options.backEnd]);
+	//backend = require(backEnds[options.backEnd]);
+	backend = require("./back-ends/multifile-playwright-firefox.js");
 	await backend.initialize(options);
 	if (options.crawlSyncSession || options.crawlLoadSession) {
 		try {
