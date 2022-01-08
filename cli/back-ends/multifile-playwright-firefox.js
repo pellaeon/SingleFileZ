@@ -111,7 +111,6 @@ async function getPageData(page, options) {
 	}, options);
 	// TODO fetch and fill resource content before return
 	await fetchAndFillPageResources(pageData);
-	await page.waitForTimeout(200000);
 	return pageData;
 }
 

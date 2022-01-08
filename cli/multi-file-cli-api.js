@@ -227,8 +227,6 @@ async function capturePage(options) {
 	try {
 		let filename;
 		const pageData = await backend.getPageData(options);
-		console.log(pageData);
-		console.log(pageData.resources);
 		if (options.output) {
 			filename = getFilename(options.output, options);
 		} else if (options.dumpContent) {
@@ -236,12 +234,27 @@ async function capturePage(options) {
 		} else {
 			filename = getFilename(pageData.filename, options);
 		}
+		// Create output directory and write the main html
 		if (filename) {
 			const dirname = path.dirname(filename);
 			if (dirname) {
 				fs.mkdirSync(dirname, { recursive: true });
 			}
 			fs.writeFileSync(filename, pageData.content);
+		}
+
+		// Write resource files
+		for (const resourceType of Object.keys(pageData.resources)) {
+			for (const resourceFile of pageData.resources[resourceType]) {
+				if (resourceFile.url && !resourceFile.url.startsWith("data:") && resourceType != "frames") {
+					let newfilename = getFilename(resourceFile.name, options);
+					const dirname = path.dirname(newfilename);
+					if (dirname) {
+						fs.mkdirSync(dirname, { recursive: true });
+					}
+					fs.writeFileSync(newfilename, resourceFile.content);
+				}
+			}
 		}
 		return pageData;
 	} catch (error) {
