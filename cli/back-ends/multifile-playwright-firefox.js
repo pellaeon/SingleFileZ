@@ -131,9 +131,11 @@ async function getPageData(page, options) {
 async function fetchAndFillPageResources(pageData) {
 	for (const resourceType of Object.keys(pageData.resources)) {
 		for (const resourceFile of pageData.resources[resourceType]) {
-			if (resourceFile.url && !resourceFile.url.startsWith("data:") && resourceType != "frames") {
-				// FIXME should not await here, should parallelize
-				resourceFile.content = await fetchAndFillFile(resourceFile);
+			if ( !resourceFile.hasOwnProperty('content') || resourceFile.content === undefined || resourceFile.content.length == 0) {
+				if ( resourceFile.url && !resourceFile.url.startsWith("data:") && resourceType != "frames") {
+					// FIXME should not await here, should parallelize
+					resourceFile.content = await fetchAndFillFile(resourceFile);
+				}
 			}
 		}
 	}
