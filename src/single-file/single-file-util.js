@@ -27,7 +27,7 @@ import * as vendor from "./vendor/index.js";
 import * as modules from "./modules/index.js";
 import * as helper from "./single-file-helper.js";
 
-const DEBUG = false;
+const DEBUG = true;
 const ONE_MB = 1024 * 1024;
 const DEFAULT_REPLACED_CHARACTERS = ["~", "+", "\\\\", "?", "%", "*", ":", "|", "\"", "<", ">", "\x00-\x1f", "\x7F"];
 const DEFAULT_REPLACEMENT_CHARACTER = "_";
@@ -55,7 +55,9 @@ export {
 
 function getInstance(utilOptions) {
 	utilOptions = utilOptions || {};
-	utilOptions.fetch = utilOptions.fetch || fetch;
+	//utilOptions.fetch = utilOptions.fetch || fetch;
+	// defined in cli/back-ends/multifile-playwright-firefox.js
+	utilOptions.fetch = window.contextGetCSS;
 	utilOptions.frameFetch = utilOptions.frameFetch || utilOptions.fetch || fetch;
 	return {
 		getDoctypeString,
@@ -223,18 +225,35 @@ function getInstance(utilOptions) {
 				response = await fetchResource(resourceURL, { referrer: options.resourceReferrer, headers: { accept } });
 			}
 		} catch (error) {
+			//console.log('fetch error: '+resourceURL+" "+String(error));
+			//console.log(response);
+			//console.log(error.stack);
 			return { resourceURL };
 		}
 		let buffer;
 		try {
-			buffer = await response.arrayBuffer();
+			if ( typeof response.arrayBuffer === 'function' ) {
+				buffer = await response.arrayBuffer();
+			} else {
+				// FIXME contextGetCSS from Playwright context returns Uint8Array, but playwright will serialize it into a regular object,
+				// so we have to use Object.values() to recreate the ArrayBuffer.
+				var arr = new Uint8Array(Object.values(response.arrayBuffer));
+				buffer = arr.buffer;
+			}
 		} catch (error) {
+			console.log(error);
 			return { data: options.asBinary ? "data:null;base64," : "", resourceURL };
 		}
 		resourceURL = response.url || resourceURL;
 		let contentType = "", charset;
 		try {
-			const mimeType = new vendor.MIMEType(response.headers.get("content-type"));
+			// When using contextGetCSS, the returned response is a specially constructed object different from Response,
+			// so the structure is a bit different.
+			if ( response.hasOwnProperty('headers') ) {// regular Response object
+				const mimeType = new vendor.MIMEType(response.headers.get("content-type"));
+			} else {
+				const mimeType = new vendor.MIMEType(response.contentType);
+			}
 			contentType = mimeType.type + "/" + mimeType.subtype;
 			charset = mimeType.parameters.get("charset");
 		} catch (error) {
