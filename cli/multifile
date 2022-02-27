@@ -53,9 +53,9 @@ async function run(options) {
 	if (options.crawlLinks || urls.length > 1) {
 		options.dumpContent = false;
 	}
-	const singlefile = await api.initialize(options);
-	await singlefile.capture(urls);
-	await singlefile.finish();
+	const cliapi = await api.initialize(options);
+	await cliapi.capture(urls);
+	await cliapi.finish();
 }
 
 function parseCookies(textValue) {

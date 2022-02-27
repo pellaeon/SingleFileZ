@@ -146,6 +146,7 @@ async function runNextTask() {
 		taskOptions.url = task.url;
 		task.status = STATE_PROCESSING;
 		saveTasks();
+		// Actually starting page capture
 		task.promise = capturePage(taskOptions);
 		const pageData = await task.promise;
 		task.status = STATE_PROCESSED;
