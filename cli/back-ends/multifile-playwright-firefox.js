@@ -23,7 +23,7 @@
 
 /* global singlefile, infobar, require, exports */
 
-const playwright = require("playwright").firefox;
+const playwright = require("playwright");
 const scripts = require("./common/scripts.js");
 
 const NETWORK_IDLE_STATE = "networkidle";
@@ -31,7 +31,7 @@ const NETWORK_IDLE_STATE = "networkidle";
 var browser, context;
 
 exports.initialize = async options => {
-	browser = await playwright.launch(getBrowserOptions(options));
+	browser = await playwright.firefox.launch(getBrowserOptions(options));
 };
 
 exports.getPageData = async options => {
@@ -93,10 +93,22 @@ async function getPageData(page, options) {
 	if (options.browserDebug) {
 		await page.waitForTimeout(3000);
 	}
-	await page.goto(options.url, {
-		timeout: options.browserLoadMaxTime || 0,
-		waitUntil: options.browserWaitUntil && options.browserWaitUntil.startsWith("networkidle") ? NETWORK_IDLE_STATE : options.browserWaitUntil || NETWORK_IDLE_STATE
-	});
+	try {
+		await page.goto(options.url, {
+			timeout: options.browserLoadMaxTime || 0,
+			waitUntil: options.browserWaitUntil && options.browserWaitUntil.startsWith("networkidle") ? NETWORK_IDLE_STATE : options.browserWaitUntil || NETWORK_IDLE_STATE
+		});
+	} catch (error) {
+		if (error instanceof playwright.errors.TimeoutError) {
+			/* Some pages have trackers that regularly tries to send XHR, so networkidle will never fire.
+			 * In this case we wait for 'load' event instead. For such pages, they should be already
+			 * loaded so it'll just return immediately and continue our next step.*/
+			await page.waitForLoadState();
+		} else {
+			throw error;
+		}
+	}
+
 	if (options.browserWaitDelay) {
 		await page.waitForTimeout(options.browserWaitDelay);
 	}
