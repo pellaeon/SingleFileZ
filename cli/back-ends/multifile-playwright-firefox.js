@@ -151,9 +151,23 @@ async function getPageData(page, options) {
 		if (options.includeInfobar) {
 			await infobar.includeScript(pageData);
 		}
+		// FIXME workaround: for unknown reason, if we return the whole pageData object back from this page.evaluate, it would fail with:
+		// page.evaluate: Execution context was destroyed, most likely because of a navigation.
+		// So, we store the fonts in the page context, and retrieve them later one by one.
+		window.fonts = pageData.resources.fonts;
+		delete pageData.resources['fonts'];
 		return pageData;
 	}, options);
-	// TODO fetch and fill resource content before return
+	var fontlen = await page.evaluate(async options => {
+		return window.fonts.length;
+	});
+	pageData.resources['fonts'] = Array();
+	for ( var i=0; i<fontlen; i++ ) {
+		var font = await page.evaluate(async (i) => {
+			return window.fonts[i];
+		}, i);
+		pageData.resources['fonts'].push(font);
+	}
 	await fetchAndFillPageResources(pageData);
 	if ( !options.browserHeadless ) await page.waitForTimeout(300000);
 	return pageData;
@@ -201,13 +215,12 @@ async function fetchAndFillFile(resourceFile) {
  * for it to call.
  */
 async function contextGetCSS(context, url, options = {}) {
-	//return context2.page.request.get("https://addons.books.com.tw/G/ADbanner/2022/02/body790.jpg");
+	console.log("contextGetCSS "+url+" for frameId "+options.frameId);
 	let contextGetOptions = options.headers || {};
 	if ( options.referrer ) contextGetOptions['referrer'] = options.referrer;
 	var resp = await context.page.request.get(url, contextGetOptions);
 	var contenttype = resp.headers()['Content-Type'] || resp.headers()['content-type'];
 	if ( contenttype == 'text/css' ) {
-		console.log("contextGetCSS "+url);
 		// Unfortunately it seems that we can't return the resp directly because playwright will fail to serialize it
 		// So we have to construct a new object without functions
 		function toArrayBuffer(buf) {
