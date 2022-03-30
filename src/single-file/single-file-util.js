@@ -55,9 +55,9 @@ export {
 
 function getInstance(utilOptions) {
 	utilOptions = utilOptions || {};
-	//utilOptions.fetch = utilOptions.fetch || fetch;
+	utilOptions.fetch = utilOptions.fetch || fetch;
 	// defined in cli/back-ends/multifile-playwright-firefox.js
-	utilOptions.fetch = window.contextGetCSS;
+	utilOptions.contextFetch = window.contextGetCSS;
 	utilOptions.frameFetch = utilOptions.frameFetch || utilOptions.fetch || fetch;
 	return {
 		getDoctypeString,
@@ -205,6 +205,7 @@ function getInstance(utilOptions) {
 	async function getContent(resourceURL, options) {
 		let response, startTime;
 		const fetchResource = utilOptions.fetch;
+		const contextFetch = utilOptions.contextFetch;
 		const fetchFrameResource = utilOptions.frameFetch;
 		if (DEBUG) {
 			startTime = Date.now();
@@ -213,8 +214,8 @@ function getInstance(utilOptions) {
 		if (options.blockMixedContent && /^https:/i.test(options.baseURI) && !/^https:/i.test(resourceURL)) {
 			return { data: options.asBinary ? "data:null;base64," : "", resourceURL };
 		}
+		const accept = options.acceptHeaders ? options.acceptHeaders[options.expectedType] : "*/*";
 		try {
-			const accept = options.acceptHeaders ? options.acceptHeaders[options.expectedType] : "*/*";
 			if (options.frameId) {
 				try {
 					response = await fetchFrameResource(resourceURL, { frameId: options.frameId, referrer: options.resourceReferrer, headers: { accept } });
@@ -225,10 +226,12 @@ function getInstance(utilOptions) {
 				response = await fetchResource(resourceURL, { referrer: options.resourceReferrer, headers: { accept } });
 			}
 		} catch (error) {
-			//console.log('fetch error: '+resourceURL+" "+String(error));
-			//console.log(response);
-			//console.log(error.stack);
-			return { resourceURL };
+			try {
+				response = await contextFetch(resourceURL, { headers: { accept } });
+			} catch (error2) {
+				console.log('fetch error: '+resourceURL+" "+String(error2)+" , caused by: "+String(error));
+				return { resourceURL };
+			}
 		}
 		let buffer;
 		try {
