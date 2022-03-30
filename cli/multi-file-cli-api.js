@@ -244,7 +244,7 @@ async function capturePage(options) {
 			fs.writeFileSync(filename, pageData.content);
 		}
 
-		// Write resource files
+		// Write resource files TODO parallelize
 		for (const resourceType of Object.keys(pageData.resources)) {
 			for (const resourceFile of pageData.resources[resourceType]) {
 				if (resourceFile.url && !resourceFile.url.startsWith("data:") && resourceType != "frames") {
@@ -253,7 +253,17 @@ async function capturePage(options) {
 					if (dirname) {
 						fs.mkdirSync(dirname, { recursive: true });
 					}
-					fs.writeFileSync(newfilename, resourceFile.content);
+					// WORKAROUND: Playwright does not have proper serialization of typed arrays https://github.com/microsoft/playwright/issues/5241
+					// When passing Uint8Array from page context, it will become a object, so we have to check for the JS type of content and write in different ways.
+					if ( resourceFile.content.constructor === Uint8Array || typeof resourceFile.content === "string" ) {
+						fs.writeFileSync(newfilename, resourceFile.content);
+						//console.log("Wrote "+newfilename+" in Uint8Array or string");
+					} else {
+						var arr = new Uint8Array(Object.values(resourceFile.content));
+						fs.writeFileSync(newfilename, arr);
+						//console.log("Wrote "+newfilename+" in "+typeof resourceFile.content);
+					}
+
 				}
 			}
 		}
