@@ -116,12 +116,32 @@ async function getPageData(page, options) {
 	page.on('console', async msg => {
 		if ( msg.type() === 'log' || msg.type() === 'trace' ) {
 			const values = [];
-			for (const arg of msg.args())
+			for (const arg of msg.args()) {
 				values.push(await arg.jsonValue());
+			}
 			console.log(...values);
 		}
 	});
 	await page.exposeBinding('contextGetCSS', contextGetCSS);
+
+	// Some webpage like https://www.cw.com.tw/article/5118917 will navigate to a new URL when you scroll to the bottom,
+	// in this case we scroll back to the top
+	page.on('framenavigated', async frame => {
+		if ( frame === page.mainFrame() ) {
+			await page.evaluate(async () => { window.scrollTo(0,0); });
+		}
+	});
+
+	// Scroll gradually to page bottom
+	await page.evaluate(async () => {
+		var initialHeight = document.body.scrollHeight;
+		console.log("initialHeight: "+initialHeight);
+		for (let i = 0; i < initialHeight && i <= 40000; i += 200) {
+			window.scrollTo(0, i);
+			if ( initialHeight != document.body.scrollHeight )
+				console.log("Height: "+document.body.scrollHeight);
+		}
+	});
 	var pageData = await page.evaluate(async options => {
 		options.compressContent = false;
 		// singlefile here is defined in ../src/single-file/index.js
