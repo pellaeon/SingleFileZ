@@ -1886,7 +1886,9 @@ class ProcessorHelper {
 									}
 									try {
 										resourceURL = originURL;
-										content = (await util.getContent(resourceURL, {
+										//let ret = await batchRequest.addURL(resourceURL, { asBinary: true, expectedType: "image" });
+										//console.log('POINT F');
+										let ret2 = await util.getContent(resourceURL, {
 											asBinary: true,
 											expectedType: "image",
 											maxResourceSize: options.maxResourceSize,
@@ -1894,7 +1896,10 @@ class ProcessorHelper {
 											frameId: options.windowId,
 											resourceReferrer: options.resourceReferrer,
 											acceptHeaders: options.acceptHeaders
-										})).data;
+										});
+										content = ret2.data;
+										contentType = ret2.contentType;
+										extension = util.getFilenameExtension(resourceURL, options.filenameReplacedCharacters, options.filenameReplacementCharacter) || util.getContentTypeExtension(contentType);
 									} catch (error) {
 										// ignored
 									}
