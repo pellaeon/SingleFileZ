@@ -132,12 +132,13 @@ async function getPageData(page, options) {
 		}
 	});
 
-	// Scroll gradually to page bottom
+	// Scroll gradually to page bottom to load any lazy-loaded content
 	await page.evaluate(async () => {
 		var initialHeight = document.body.scrollHeight;
 		console.log("initialHeight: "+initialHeight);
-		for (let i = 0; i < initialHeight && i <= 40000; i += 200) {
+		for (let i = 0; i < initialHeight && i <= 40000; i += 500) {
 			window.scrollTo(0, i);
+			await new Promise(r => setTimeout(r, 50));
 			if ( initialHeight != document.body.scrollHeight )
 				console.log("Height: "+document.body.scrollHeight);
 		}
