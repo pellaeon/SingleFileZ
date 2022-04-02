@@ -226,47 +226,61 @@ function getHostURL(url) {
 
 async function capturePage(options) {
 	try {
-		let filename;
 		const pageData = await backend.getPageData(options);
-		if (options.output) {
-			filename = getFilename(options.output, options);
-		} else if (options.dumpContent) {
+		let newfilename;
+
+		if (options.dumpContent)
 			await new Promise(resolve => process.stdout.write(pageData.content, resolve));
+
+		if (options.output) {
+			newfilename = getFilename(options.output, options);
 		} else {
-			filename = getFilename(pageData.filename, options);
+			if ( !pageData.hasOwnProperty('filename') || pageData.filename === undefined || pageData.filename == "" )
+				pageData.filename = "index.html";
+			newfilename = getFilename(pageData.filename, options);
 		}
-		// Create output directory and write the main html
-		if (filename) {
-			const dirname = path.dirname(filename);
-			if (dirname) {
-				fs.mkdirSync(dirname, { recursive: true });
-			}
-			fs.writeFileSync(filename, pageData.content);
-		}
+		pageData.filename = path.basename(newfilename)
+		const mainbasedir = path.dirname(newfilename);
 
-		// Write resource files TODO parallelize
-		for (const resourceType of Object.keys(pageData.resources)) {
-			for (const resourceFile of pageData.resources[resourceType]) {
-				if (resourceFile.url && !resourceFile.url.startsWith("data:") && resourceType != "frames") {
-					let newfilename = getFilename(resourceFile.name, options);
-					const dirname = path.dirname(newfilename);
-					if (dirname) {
-						fs.mkdirSync(dirname, { recursive: true });
+		async function writeResourceData(resourceData, basedir) {
+			if ( !resourceData.hasOwnProperty('filename') || resourceData.filename === undefined || resourceData.filename == "" )
+				resourceData.filename = "index.html";
+			fs.mkdirSync(basedir, { recursive: true });
+			let mainfilename = path.join(basedir,resourceData.filename);
+			// Create output directory and write the main html
+			fs.writeFileSync(mainfilename, resourceData.content);
+			// Write resource files
+			var filewrites = Array();
+			for (const resourceType of Object.keys(resourceData.resources)) {
+				for (const resourceFile of resourceData.resources[resourceType]) {
+					let fullfilename = path.join(basedir,resourceFile.name);
+					if (resourceFile.url && !resourceFile.url.startsWith("data:") && resourceType != "frames") {
+						//let newfilename = prefixName + getFilename(resourceFile.name, options);
+						const dirname = path.dirname(fullfilename);
+						if (dirname) {
+							fs.mkdirSync(dirname, { recursive: true });
+						}
+						// WORKAROUND: Playwright does not have proper serialization of typed arrays https://github.com/microsoft/playwright/issues/5241
+						// When passing Uint8Array from page context, it will become a object, so we have to check for the JS type of content and write in different ways.
+						if ( resourceFile.content === undefined ) {
+							console.log('resourceFile.content undefined! ');
+							console.log(resourceFile);
+						} else if ( resourceFile.content.constructor === Uint8Array || typeof resourceFile.content === "string" ) {
+							filewrites.push(fs.writeFile(fullfilename, resourceFile.content, () => {}));
+							//console.log("Wrote "+newfilename+" in Uint8Array or string");
+						} else {
+							var arr = new Uint8Array(Object.values(resourceFile.content));
+							filewrites.push(fs.writeFile(fullfilename, arr, () => {}));
+							//console.log("Wrote "+newfilename+" in "+typeof resourceFile.content);
+						}
+					} else if ( resourceFile.url && !resourceFile.url.startsWith("data:") && resourceType == "frames") {
+						filewrites.push(writeResourceData(resourceFile, fullfilename));
 					}
-					// WORKAROUND: Playwright does not have proper serialization of typed arrays https://github.com/microsoft/playwright/issues/5241
-					// When passing Uint8Array from page context, it will become a object, so we have to check for the JS type of content and write in different ways.
-					if ( resourceFile.content.constructor === Uint8Array || typeof resourceFile.content === "string" ) {
-						fs.writeFileSync(newfilename, resourceFile.content);
-						//console.log("Wrote "+newfilename+" in Uint8Array or string");
-					} else {
-						var arr = new Uint8Array(Object.values(resourceFile.content));
-						fs.writeFileSync(newfilename, arr);
-						//console.log("Wrote "+newfilename+" in "+typeof resourceFile.content);
-					}
-
 				}
 			}
+			return Promise.all(filewrites);
 		}
+		await writeResourceData(pageData, mainbasedir);
 		return pageData;
 	} catch (error) {
 		const message = "URL: " + options.url + "\nStack: " + error.stack + "\n";

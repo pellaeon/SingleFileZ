@@ -148,6 +148,7 @@ async function getPageData(page, options) {
 		options.getFileContent = singlefile.getFileContent;
 		//options.fetch = window.contextGetCSS;
 		const pageData = await singlefile.getPageData(options);
+		console.log("Finished singlefile.getPageData in page context");
 		if (options.includeInfobar) {
 			await infobar.includeScript(pageData);
 		}
@@ -162,7 +163,9 @@ async function getPageData(page, options) {
 		return window.fonts.length;
 	});
 	pageData.resources['fonts'] = Array();
+	// NOTE: attempts to parallelize this had failed, it always threw "error: target closed"
 	for ( var i=0; i<fontlen; i++ ) {
+		console.log("Retrieving pageData.resources.fonts: "+i+" / "+fontlen);
 		var font = await page.evaluate(async (i) => {
 			return window.fonts[i];
 		}, i);
