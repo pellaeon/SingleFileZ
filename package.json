@@ -6,7 +6,8 @@
 	"license": "AGPL-3.0-or-later",
 	"main": "cli/single-file-cli-api.js",
 	"bin": {
-		"single-file": "./cli/single-filez"
+		"single-file": "./cli/single-filez",
+		"multifile": "./cli/multifile"
 	},
 	"dependencies": {
 		"file-url": "^3.0.0",
