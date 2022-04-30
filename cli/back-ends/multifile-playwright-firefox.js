@@ -153,25 +153,12 @@ async function getPageData(page, options) {
 		if (options.includeInfobar) {
 			await infobar.includeScript(pageData);
 		}
-		// FIXME workaround: for unknown reason, if we return the whole pageData object back from this page.evaluate, it would fail with:
-		// page.evaluate: Execution context was destroyed, most likely because of a navigation.
-		// So, we store the fonts in the page context, and retrieve them later one by one.
-		window.fonts = pageData.resources.fonts;
-		delete pageData.resources['fonts'];
+		// FIXME workaround: it seems that data passage between browser context and node context is slow and error-prone,
+		// so for fonts and images (which are big files) we remove their content and fetch them again from node context
+		pageData.resources['fonts'].forEach( (font) => { font.content = null; });
+		pageData.resources['images'].forEach( (image) => { image.content = null; });
 		return pageData;
 	}, options);
-	var fontlen = await page.evaluate(async options => {
-		return window.fonts.length;
-	});
-	pageData.resources['fonts'] = Array();
-	// NOTE: attempts to parallelize this had failed, it always threw "error: target closed"
-	for ( var i=0; i<fontlen; i++ ) {
-		console.log("Retrieving pageData.resources.fonts: "+i+" / "+fontlen);
-		var font = await page.evaluate(async (i) => {
-			return window.fonts[i];
-		}, i);
-		pageData.resources['fonts'].push(font);
-	}
 	await fetchAndFillPageResources(pageData);
 	if ( !options.browserHeadless ) await page.waitForTimeout(300000);
 	return pageData;
@@ -179,35 +166,27 @@ async function getPageData(page, options) {
 
 // Function modified from lib/single-file/processors/compression/compression.js addPageResources
 async function fetchAndFillPageResources(pageData) {
+	var promises = [];
 	for (const resourceType of Object.keys(pageData.resources)) {
 		for (const resourceFile of pageData.resources[resourceType]) {
-			if ( !resourceFile.hasOwnProperty('content') || resourceFile.content === undefined || resourceFile.content.length == 0) {
+			if ( !resourceFile.hasOwnProperty('content') || resourceFile.content === null || resourceFile.content === undefined || resourceFile.content.length == 0) {
 				if ( resourceFile.url && !resourceFile.url.startsWith("data:") && resourceType != "frames") {
-					// FIXME should not await here, should parallelize
-					resourceFile.content = await fetchAndFillFile(resourceFile);
+					var promise = fetchAndFillFile(resourceFile);
+					promise.then(content => {
+						resourceFile.content = content;
+						console.log("DONE Downloading resourceFile "+resourceFile.url+" as "+resourceFile.name);
+					});
+					promises.push(promise);
 				}
 			}
 		}
 	}
-	/*
-	await Promise.all(Object.keys(pageData.resources).map(async resourceType =>
-		Promise.all(pageData.resources[resourceType].map(resourceFile => {
-			/* FIXME don't handle frames for now
-			if (resourceType == "frames") {
-				return fetchAndFillPageResources(data);
-			} else {
-				return addFile(zipWriter, prefixName, data, true);
-			}
-			return resourceFile.content;
-		}))
-	));
-	*/
-	//console.log(pageData.resources);
+	await Promise.all(promises);
 }
 
 async function fetchAndFillFile(resourceFile) {
-	console.log("Handling resourceFile: "+resourceFile.url);
-	return context.request.get(resourceFile.url).
+	console.log("Downloading resourceFile "+resourceFile.url+" as "+resourceFile.name);
+	return context.request.get(resourceFile.url, {timeout: 10000}).
 		then(apiresponse => apiresponse.body());
 }
 
